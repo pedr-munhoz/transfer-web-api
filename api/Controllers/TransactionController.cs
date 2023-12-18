@@ -46,6 +46,8 @@ namespace api.Controllers
                 Amount = model.Amount,
             };
 
+            account.Balance += transaction.Amount;
+
             await _dbContext.Transactions.AddAsync(transaction);
             await _dbContext.SaveChangesAsync();
 
@@ -70,12 +72,18 @@ namespace api.Controllers
             if (destinationAccount == null)
                 return NotFound("Destination account not found");
 
+            if (originAccount.Balance < model.Amount)
+                return UnprocessableEntity("Not enough balance");
+
             var transaction = new Transaction
             {
                 DestinationAccountId = destinationAccount.Id,
                 OriginAccountId = originAccount.Id,
                 Amount = model.Amount,
             };
+
+            destinationAccount.Balance += transaction.Amount;
+            originAccount.Balance -= transaction.Amount;
 
             await _dbContext.Transactions.AddAsync(transaction);
             await _dbContext.SaveChangesAsync();
