@@ -5,8 +5,11 @@ using System.Threading.Tasks;
 using api.Infrastructure.Database;
 using api.Models.Entities;
 using api.Models.ViewModels;
+using Medallion.Threading.Postgres;
+using Medallion.Threading.Redis;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 
 namespace api.Controllers
 {
@@ -30,8 +33,46 @@ namespace api.Controllers
         }
 
         [HttpPost]
-        [Route("deposit")]
-        public async Task<IActionResult> Deposit([FromBody] DepositViewModel model)
+        [Route("deposit/lock")]
+        public async Task<IActionResult> DepositWithLock([FromBody] DepositViewModel model)
+        {
+            var account = await _dbContext.Accounts
+                .Where(x => x.Id == model.AccountId)
+                .FirstOrDefaultAsync();
+
+            if (account == null)
+                return NotFound("Account not found");
+
+            var transaction = new Transaction
+            {
+                DestinationAccountId = account.Id,
+                Amount = model.Amount,
+            };
+
+            var @lock = new PostgresDistributedLock(
+                new PostgresAdvisoryLockKey(account.Id.ToString(), allowHashing: true),
+                "Host=postgresserver;Port=5432;Database=transfers_db;Username=postgres;Password=123456;Pooling=false"
+                );
+
+            await using (await @lock.AcquireAsync())
+            {
+                // I have the lock
+                await _dbContext.Entry(account).ReloadAsync();
+
+                account.Balance += transaction.Amount;
+
+                Thread.Sleep(5000);
+
+                await _dbContext.Transactions.AddAsync(transaction);
+                await _dbContext.SaveChangesAsync();
+            }
+
+            return Ok(transaction);
+        }
+
+        [HttpPost]
+        [Route("deposit/no-lock")]
+        public async Task<IActionResult> DepositWithoutLock([FromBody] DepositViewModel model)
         {
             var account = await _dbContext.Accounts
                 .Where(x => x.Id == model.AccountId)
