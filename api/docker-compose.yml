@@ -1,0 +1,27 @@
+version: "3"
+services:
+  postgresserver:
+    image: postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=123456
+      - POSTGRES_DB=transfers_db
+    expose:
+      - "5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  web-api:
+    build: .
+    environment:
+      ServerDbConnectionString: "Host=postgresserver;Port=5432;Database=transfers_db;Username=postgres;Password=123456;Pooling=false;"
+    ports:
+      - "8090:80"
+    links:
+      - postgresserver
+    depends_on:
+      - "postgresserver"
+
+volumes:
+  pgdata:
