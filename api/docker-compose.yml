@@ -12,7 +12,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  web-api:
+  web-api-1:
     build: .
     environment:
       ServerDbConnectionString: "Host=postgresserver;Port=5432;Database=transfers_db;Username=postgres;Password=123456;Pooling=false;"
@@ -22,6 +22,23 @@ services:
       - postgresserver
     depends_on:
       - "postgresserver"
+    deploy:
+      mode: replicated
+      replicas: 1
+  
+  web-api-2:
+    build: .
+    environment:
+      ServerDbConnectionString: "Host=postgresserver;Port=5432;Database=transfers_db;Username=postgres;Password=123456;Pooling=false;"
+    ports:
+      - "8000:80"
+    links:
+      - postgresserver
+    depends_on:
+      - "postgresserver"
+    deploy:
+      mode: replicated
+      replicas: 1
 
 volumes:
   pgdata:

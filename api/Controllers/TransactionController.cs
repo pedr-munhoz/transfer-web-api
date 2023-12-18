@@ -48,6 +48,8 @@ namespace api.Controllers
 
             account.Balance += transaction.Amount;
 
+            Thread.Sleep(5000);
+
             await _dbContext.Transactions.AddAsync(transaction);
             await _dbContext.SaveChangesAsync();
 
@@ -84,6 +86,8 @@ namespace api.Controllers
 
             destinationAccount.Balance += transaction.Amount;
             originAccount.Balance -= transaction.Amount;
+
+            Thread.Sleep(5000);
 
             await _dbContext.Transactions.AddAsync(transaction);
             await _dbContext.SaveChangesAsync();
