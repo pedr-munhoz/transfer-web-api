@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using api.Infrastructure.Database;
 using api.Models.Entities;
 using api.Models.ViewModels;
+using api.Services;
 using Medallion.Threading.Postgres;
 using Medallion.Threading.Redis;
 using Microsoft.AspNetCore.Mvc;
@@ -18,10 +19,12 @@ namespace api.Controllers
     public class TransactionController : ControllerBase
     {
         private readonly TransfersDbContext _dbContext;
+        private readonly ILockService _lockService;
 
-        public TransactionController(TransfersDbContext dbContext)
+        public TransactionController(TransfersDbContext dbContext, ILockService lockService)
         {
             _dbContext = dbContext;
+            _lockService = lockService;
         }
 
         [HttpGet]
@@ -49,23 +52,20 @@ namespace api.Controllers
                 Amount = model.Amount,
             };
 
-            var @lock = new PostgresDistributedLock(
-                new PostgresAdvisoryLockKey(account.Id.ToString(), allowHashing: true),
-                "Host=postgresserver;Port=5432;Database=transfers_db;Username=postgres;Password=123456;Pooling=false"
-                );
+            await _lockService.ExecuteLockedAsync(
+                key: account.Id.ToString(),
+                method: async () =>
+                {
+                    await _dbContext.Entry(account).ReloadAsync();
 
-            await using (await @lock.AcquireAsync())
-            {
-                // I have the lock
-                await _dbContext.Entry(account).ReloadAsync();
+                    account.Balance += transaction.Amount;
 
-                account.Balance += transaction.Amount;
+                    Thread.Sleep(5000);
 
-                Thread.Sleep(5000);
-
-                await _dbContext.Transactions.AddAsync(transaction);
-                await _dbContext.SaveChangesAsync();
-            }
+                    await _dbContext.Transactions.AddAsync(transaction);
+                    await _dbContext.SaveChangesAsync();
+                }
+            );
 
             return Ok(transaction);
         }

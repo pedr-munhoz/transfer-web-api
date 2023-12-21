@@ -17,6 +17,8 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddTransient<ILockService, DistributedLockService>();
+
 var app = builder.Build();
 
 DatabaseManagementService.MigrationInitialisation(app);
