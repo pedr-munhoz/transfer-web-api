@@ -11,7 +11,7 @@ namespace api.Services
             _configuration = configuration;
         }
 
-        public async Task<T> ExecuteLockedAsync<T>(string key, Func<Task<T>> method) where T : class
+        public async Task<T> ExecuteLockedAsync<T>(string key, Func<Task<T>> method)
         {
             var @lock = GetLock(key);
 

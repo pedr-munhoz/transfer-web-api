@@ -98,8 +98,60 @@ namespace api.Controllers
         }
 
         [HttpPost]
-        [Route("transfer")]
-        public async Task<IActionResult> Transfer([FromBody] TransferViewModel model)
+        [Route("transfer/lock")]
+        public async Task<IActionResult> TransferWithLock([FromBody] TransferViewModel model)
+        {
+            var originAccount = await _dbContext.Accounts
+                .Where(x => x.Id == model.OriginAccountId)
+                .FirstOrDefaultAsync();
+
+            if (originAccount == null)
+                return NotFound("Origin account not found");
+
+            var destinationAccount = await _dbContext.Accounts
+                .Where(x => x.Id == model.DestinationAccountId)
+                .FirstOrDefaultAsync();
+
+            if (destinationAccount == null)
+                return NotFound("Destination account not found");
+
+            var transaction = new Transaction
+            {
+                DestinationAccountId = destinationAccount.Id,
+                OriginAccountId = originAccount.Id,
+                Amount = model.Amount,
+            };
+
+            var approved = await _lockService.ExecuteLockedAsync<bool>(
+                key: originAccount.Id.ToString(),
+                method: async () =>
+                {
+                    await _dbContext.Entry(originAccount).ReloadAsync();
+
+                    if (originAccount.Balance < model.Amount)
+                        return false;
+
+                    destinationAccount.Balance += transaction.Amount;
+                    originAccount.Balance -= transaction.Amount;
+
+                    Thread.Sleep(5000);
+
+                    await _dbContext.Transactions.AddAsync(transaction);
+                    await _dbContext.SaveChangesAsync();
+
+                    return true;
+                }
+            );
+
+            if (!approved)
+                return UnprocessableEntity("Not enough balance");
+
+            return Ok(transaction);
+        }
+
+        [HttpPost]
+        [Route("transfer/no-lock")]
+        public async Task<IActionResult> TransferWithoutLock([FromBody] TransferViewModel model)
         {
             var originAccount = await _dbContext.Accounts
                 .Where(x => x.Id == model.OriginAccountId)
