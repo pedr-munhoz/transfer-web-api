@@ -11,7 +11,7 @@ namespace api.Services
             _configuration = configuration;
         }
 
-        public async Task<T> ExecuteLockedAsync<T>(string key, Func<Task<T>> method)
+        public async Task<T?> ExecuteLockedAsync<T>(string key, Func<Task<T>> method)
         {
             var @lock = GetLock(key);
 
@@ -36,56 +36,43 @@ namespace api.Services
             }
         }
 
-        public async Task<T> ExecuteLockedAsync<T>(List<string> keys, Func<Task<T>> method)
+        public async Task<T?> ExecuteLockedAsync<T>(List<string> keys, Func<Task<T>> method)
         {
-            var locks = keys.Select(GetLock).ToList();
+            if (!keys.Any())
+                return default;
 
-            // Acquire all locks
-            foreach (var @lock in locks)
-            {
-                await @lock.AcquireAsync();
-            }
+            if (keys.Count == 1)
+                return await ExecuteLockedAsync(key: keys.First(), method: method);
 
-            T response;
-            try
-            {
-                // All locks acquired
-                response = await method();
-            }
-            finally
-            {
-                // Release all locks by allowing them to be disposed
-                foreach (var @lock in locks)
-                {
-                    // The lock will be disposed, and the associated resources will be released
-                }
-            }
+            var key = keys.First();
+            var remainingKeys = keys.Skip(1).ToList();
 
-            return response;
+            var @lock = GetLock(key);
+
+            await using (await @lock.AcquireAsync())
+            {
+                // I have the lock
+                return await ExecuteLockedAsync(keys: remainingKeys, method: method);
+            }
         }
 
         public async Task ExecuteLockedAsync(List<string> keys, Func<Task> method)
         {
-            var locks = keys.Select(GetLock).ToList();
+            if (!keys.Any())
+                return;
 
-            // Acquire all locks
-            foreach (var @lock in locks)
-            {
-                await @lock.AcquireAsync();
-            }
+            if (keys.Count == 1)
+                await ExecuteLockedAsync(key: keys.First(), method: method);
 
-            try
+            var key = keys.First();
+            var remainingKeys = keys.Skip(1).ToList();
+
+            var @lock = GetLock(key);
+
+            await using (await @lock.AcquireAsync())
             {
-                // All locks acquired
-                await method();
-            }
-            finally
-            {
-                // Release all locks by allowing them to be disposed
-                foreach (var @lock in locks)
-                {
-                    // The lock will be disposed, and the associated resources will be released
-                }
+                // I have the lock
+                await ExecuteLockedAsync(keys: remainingKeys, method: method);
             }
         }
 

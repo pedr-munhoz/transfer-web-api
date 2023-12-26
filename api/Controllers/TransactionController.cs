@@ -123,7 +123,7 @@ namespace api.Controllers
             };
 
             var approved = await _lockService.ExecuteLockedAsync<bool>(
-                key: originAccount.Id.ToString(),
+                keys: new List<string> { originAccount.Id.ToString(), destinationAccount.Id.ToString() },
                 method: async () =>
                 {
                     await _dbContext.Entry(originAccount).ReloadAsync();
