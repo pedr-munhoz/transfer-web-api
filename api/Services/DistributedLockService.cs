@@ -36,6 +36,59 @@ namespace api.Services
             }
         }
 
+        public async Task<T> ExecuteLockedAsync<T>(List<string> keys, Func<Task<T>> method)
+        {
+            var locks = keys.Select(GetLock).ToList();
+
+            // Acquire all locks
+            foreach (var @lock in locks)
+            {
+                await @lock.AcquireAsync();
+            }
+
+            T response;
+            try
+            {
+                // All locks acquired
+                response = await method();
+            }
+            finally
+            {
+                // Release all locks by allowing them to be disposed
+                foreach (var @lock in locks)
+                {
+                    // The lock will be disposed, and the associated resources will be released
+                }
+            }
+
+            return response;
+        }
+
+        public async Task ExecuteLockedAsync(List<string> keys, Func<Task> method)
+        {
+            var locks = keys.Select(GetLock).ToList();
+
+            // Acquire all locks
+            foreach (var @lock in locks)
+            {
+                await @lock.AcquireAsync();
+            }
+
+            try
+            {
+                // All locks acquired
+                await method();
+            }
+            finally
+            {
+                // Release all locks by allowing them to be disposed
+                foreach (var @lock in locks)
+                {
+                    // The lock will be disposed, and the associated resources will be released
+                }
+            }
+        }
+
         private PostgresDistributedLock GetLock(string key)
         {
             var connectionString = _configuration.GetValue<string>("ServerDbConnectionString");
